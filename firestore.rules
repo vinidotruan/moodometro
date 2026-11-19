@@ -1,0 +1,188 @@
+rules_version = '2';
+
+// Moodômetro — regras do Firestore
+//
+// Modelo:
+//   users/{uid}                         perfil mínimo (nome, nomes dos humores)
+//   statuses/{uid}                      humor compartilhado; só quem está em `viewers` lê
+//   invites/{code}                      convite; quem tem o código lê e aceita uma vez
+//   connections/{a_b}                   relação entre 2 pessoas (id = uids ordenados)
+//   connections/{a_b}/wants/{uid}       "o que eu quero" (carinho, comida…), os dois leem
+//   connections/{a_b}/intimate/{uid}    parte íntima: só existe pra leitura/escrita se
+//                                       relation == 'namoro' E os dois confirmaram
+//
+// Princípio: o app esconde, mas quem decide é daqui. Rebaixar a relação pra amizade,
+// ou qualquer um retirar a confirmação, fecha a parte íntima na hora.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function incoming() { return request.resource.data; }
+    function onlyKeys(allowed) { return incoming().keys().hasOnly(allowed); }
+    function changedKeys() { return incoming().diff(resource.data).affectedKeys(); }
+
+    function pairId(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function connPath(id) { return /databases/$(database)/documents/connections/$(id); }
+    function invitePath(code) { return /databases/$(database)/documents/invites/$(code); }
+    function isConnectedTo(uid) { return exists(connPath(pairId(me(), uid))); }
+
+    function isMember(c) { return me() in c.members; }
+    function bothConfirmed(c) { return c.confirmedBy.keys().hasAll(c.members); }
+    function intimateOpen(c) { return c.relation == 'namoro' && bothConfirmed(c); }
+
+    function isMood(m) { return m in ['alegre', 'choroso', 'cansado', 'carente', 'irritado', 'animado']; }
+    function isRelation(r) { return r in ['namoro', 'amizade']; }
+    function pct(m, k) { return !(k in m) || (m[k] is int && m[k] >= 0 && m[k] <= 100); }
+    function shortText(s, max) { return s is string && s.size() <= max; }
+
+    function validBasicWants(v) {
+      return v is map
+        && v.keys().hasOnly(['carinho', 'atencao', 'comida', 'conversa', 'presente', 'role'])
+        && pct(v, 'carinho') && pct(v, 'atencao') && pct(v, 'comida')
+        && pct(v, 'conversa') && pct(v, 'presente') && pct(v, 'role');
+    }
+    function validIntimateWants(v) {
+      return v is map
+        && v.keys().hasOnly(['sexo', 'intensidade'])
+        && pct(v, 'sexo') && pct(v, 'intensidade');
+    }
+
+    // ---------- perfis ----------
+    match /users/{uid} {
+      allow read: if signedIn() && (me() == uid || isConnectedTo(uid));
+      allow create, update: if signedIn() && me() == uid
+        && onlyKeys(['name', 'moodLabels', 'updatedAt'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 60
+        && (!('moodLabels' in incoming()) || (
+              incoming().moodLabels is map
+              && incoming().moodLabels.keys().hasOnly(['alegre', 'choroso', 'cansado', 'carente', 'irritado', 'animado'])
+           ));
+      allow delete: if signedIn() && me() == uid;
+    }
+
+    // ---------- humor compartilhado ----------
+    match /statuses/{uid} {
+      // Lido doc a doc (sem `list`): exige estar em `viewers` E ainda estar conectado.
+      // Assim, se alguém desfaz a conexão, perde o acesso na hora, mesmo que o dono
+      // ainda não tenha tirado a pessoa da lista de viewers.
+      // `resource == null` libera ler um status que ainda não existe (só revela que não existe),
+      // pra o listener não morrer antes da pessoa compartilhar pela primeira vez.
+      allow get: if signedIn() && (
+        me() == uid
+        || resource == null
+        || (me() in resource.data.viewers && isConnectedTo(uid))
+      );
+      allow create, update: if signedIn() && me() == uid
+        && onlyKeys(['mood', 'note', 'topics', 'viewers', 'sharedAt'])
+        && isMood(incoming().mood)
+        && shortText(incoming().note, 280)
+        && incoming().topics is list && incoming().topics.size() <= 10
+        && incoming().viewers is list && incoming().viewers.size() <= 50
+        && !(uid in incoming().viewers)
+        // Compartilhar carimba a hora do servidor; só editar viewers mantém a hora antiga.
+        && (incoming().sharedAt == request.time
+            || (resource != null && incoming().sharedAt == resource.data.sharedAt));
+      allow delete: if signedIn() && me() == uid;
+    }
+
+    // ---------- convites ----------
+    match /invites/{code} {
+      // Código longo e aleatório funciona como segredo: `get` sim, `list` só os meus.
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.from == me();
+      allow create: if signedIn()
+        && code.size() >= 16
+        && onlyKeys(['from', 'fromName', 'label', 'relation', 'createdAt', 'expiresAt', 'usedBy'])
+        && incoming().from == me()
+        && shortText(incoming().fromName, 60)
+        && shortText(incoming().label, 60)
+        && isRelation(incoming().relation)
+        && incoming().createdAt == request.time
+        && incoming().expiresAt is timestamp
+        && incoming().expiresAt <= request.time + duration.value(8, 'd')
+        && incoming().usedBy == null;
+      // Aceitar: só marca usedBy, e só junto (mesmo batch) com a criação da conexão.
+      allow update: if signedIn()
+        && resource.data.usedBy == null
+        && resource.data.from != me()
+        && request.time < resource.data.expiresAt
+        && changedKeys().hasOnly(['usedBy'])
+        && incoming().usedBy == me()
+        && existsAfter(connPath(pairId(me(), resource.data.from)));
+      allow delete: if signedIn() && resource.data.from == me();
+    }
+
+    // ---------- conexões ----------
+    function validAccept(id, d) {
+      let inv = get(invitePath(d.inviteCode)).data;
+      return inv.usedBy == null
+        && request.time < inv.expiresAt
+        && inv.from != me()
+        && id == pairId(me(), inv.from)
+        && d.members.size() == 2 && d.members.hasAll([me(), inv.from])
+        && d.relation == inv.relation
+        // Quem convidou já escolheu a relação; quem aceita confirma ao aceitar.
+        && d.confirmedBy.keys().hasOnly([me(), inv.from])
+        && d.confirmedBy.keys().hasAll([me(), inv.from])
+        && d.confirmedBy[me()] == true && d.confirmedBy[inv.from] == true
+        && getAfter(invitePath(d.inviteCode)).data.usedBy == me();
+    }
+
+    match /connections/{id} {
+      allow read: if signedIn() && isMember(resource.data);
+
+      allow create: if signedIn()
+        && onlyKeys(['members', 'relation', 'confirmedBy', 'inviteCode', 'createdAt', 'updatedAt'])
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && validAccept(id, incoming());
+
+      allow update: if signedIn() && isMember(resource.data)
+        && changedKeys().hasOnly(['relation', 'confirmedBy', 'updatedAt'])
+        && incoming().updatedAt == request.time
+        && (
+          // Propor outra relação: zera as confirmações e fica só a minha.
+          (isRelation(incoming().relation)
+            && incoming().relation != resource.data.relation
+            && incoming().confirmedBy.keys().hasOnly([me()])
+            && incoming().confirmedBy.keys().hasAll([me()])
+            && incoming().confirmedBy[me()] == true)
+          ||
+          // Confirmar (ou retirar) a MINHA confirmação da relação atual.
+          (incoming().relation == resource.data.relation
+            && incoming().confirmedBy.diff(resource.data.confirmedBy).affectedKeys().hasOnly([me()])
+            && (!(me() in incoming().confirmedBy) || incoming().confirmedBy[me()] == true))
+        );
+
+      // Qualquer um dos dois pode encerrar a conexão.
+      allow delete: if signedIn() && isMember(resource.data);
+
+      match /wants/{uid} {
+        allow read: if signedIn() && isMember(get(connPath(id)).data);
+        allow create, update: if signedIn() && me() == uid
+          && isMember(get(connPath(id)).data)
+          && onlyKeys(['values', 'updatedAt'])
+          && incoming().updatedAt == request.time
+          && validBasicWants(incoming().values);
+        allow delete: if signedIn() && me() == uid;
+      }
+
+      match /intimate/{uid} {
+        allow read: if signedIn()
+          && isMember(get(connPath(id)).data)
+          && intimateOpen(get(connPath(id)).data);
+        allow create, update: if signedIn() && me() == uid
+          && isMember(get(connPath(id)).data)
+          && intimateOpen(get(connPath(id)).data)
+          && onlyKeys(['values', 'updatedAt'])
+          && incoming().updatedAt == request.time
+          && validIntimateWants(incoming().values);
+        // Apagar o próprio dado íntimo é sempre permitido, mesmo com a seção fechada.
+        allow delete: if signedIn() && me() == uid;
+      }
+    }
+  }
+}

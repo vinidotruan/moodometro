@@ -1,0 +1,100 @@
+// Moodômetro design tokens
+// Base: Catppuccin (https://catppuccin.com/palette) — Latte (claro) e Mocha (escuro).
+// Camada 1: cores cruas da paleta (--ctp-*). Camada 2: tokens semânticos (--mm-*).
+// Componentes só usam --mm-*; trocar de tema = trocar o data-theme.
+
+// ---------- Camada 1: paleta crua ----------
+@mixin ctp-latte {
+  --ctp-rosewater: #dc8a78; --ctp-flamingo: #dd7878; --ctp-pink: #ea76cb; --ctp-mauve: #8839ef;
+  --ctp-red: #d20f39; --ctp-maroon: #e64553; --ctp-peach: #fe640b; --ctp-yellow: #df8e1d;
+  --ctp-green: #40a02b; --ctp-teal: #179299; --ctp-sky: #04a5e5; --ctp-sapphire: #209fb5;
+  --ctp-blue: #1e66f5; --ctp-lavender: #7287fd;
+  --ctp-text: #4c4f69; --ctp-subtext1: #5c5f77; --ctp-subtext0: #6c6f85;
+  --ctp-overlay2: #7c7f93; --ctp-overlay1: #8c8fa1; --ctp-overlay0: #9ca0b0;
+  --ctp-surface2: #acb0be; --ctp-surface1: #bcc0cc; --ctp-surface0: #ccd0da;
+  --ctp-base: #eff1f5; --ctp-mantle: #e6e9ef; --ctp-crust: #dce0e8;
+}
+
+@mixin ctp-mocha {
+  --ctp-rosewater: #f5e0dc; --ctp-flamingo: #f2cdcd; --ctp-pink: #f5c2e7; --ctp-mauve: #cba6f7;
+  --ctp-red: #f38ba8; --ctp-maroon: #eba0ac; --ctp-peach: #fab387; --ctp-yellow: #f9e2af;
+  --ctp-green: #a6e3a1; --ctp-teal: #94e2d5; --ctp-sky: #89dceb; --ctp-sapphire: #74c7ec;
+  --ctp-blue: #89b4fa; --ctp-lavender: #b4befe;
+  --ctp-text: #cdd6f4; --ctp-subtext1: #bac2de; --ctp-subtext0: #a6adc8;
+  --ctp-overlay2: #9399b2; --ctp-overlay1: #7f849c; --ctp-overlay0: #6c7086;
+  --ctp-surface2: #585b70; --ctp-surface1: #45475a; --ctp-surface0: #313244;
+  --ctp-base: #1e1e2e; --ctp-mantle: #181825; --ctp-crust: #11111b;
+}
+
+// ---------- Camada 2: tokens semânticos ----------
+@mixin mm-semantic {
+  --mm-bg: var(--ctp-base);
+  --mm-surface: var(--ctp-mantle);
+  --mm-surface-raised: var(--ctp-surface0);
+  --mm-border: var(--ctp-surface0);
+  --mm-border-strong: var(--ctp-surface2);
+  --mm-text: var(--ctp-text);
+  --mm-text-muted: var(--ctp-subtext0);
+  --mm-primary: var(--ctp-mauve);
+  --mm-on-primary: var(--ctp-base);
+  --mm-accent: var(--ctp-peach);
+  --mm-focus: var(--ctp-lavender);
+  --mm-danger: var(--ctp-red);
+
+  // Humores: cor de destaque (ícone, borda, ponto) e fundo do card selecionado
+  --mm-mood-alegre: var(--ctp-yellow);
+  --mm-mood-choroso: var(--ctp-blue);
+  --mm-mood-cansado: var(--ctp-overlay1);
+  --mm-mood-carente: var(--ctp-pink);
+  --mm-mood-irritado: var(--ctp-red);
+  --mm-mood-animado: var(--ctp-green);
+}
+
+@mixin mm-latte {
+  @include ctp-latte;
+  @include mm-semantic;
+  color-scheme: light;
+  // No Latte as cores são saturadas: o fundo do humor é uma mistura suave com a base
+  --mm-mood-mix: 25%;
+  --mm-on-mood: var(--ctp-text);
+}
+
+@mixin mm-mocha {
+  @include ctp-mocha;
+  @include mm-semantic;
+  color-scheme: dark;
+  --mm-on-primary: var(--ctp-crust);
+  --mm-mood-cansado: var(--ctp-overlay2);
+  // No Mocha os pastéis já funcionam como fundo, com texto escuro por cima
+  --mm-mood-mix: 100%;
+  --mm-on-mood: var(--ctp-crust);
+}
+
+// ---------- Escalas (iguais nos dois temas) ----------
+@mixin mm-scales {
+  --mm-font-heading: 'Fredoka', 'Nunito', system-ui, sans-serif;
+  --mm-font-body: 'Nunito', system-ui, sans-serif;
+
+  --mm-text-xs: 0.8125rem;  // 13
+  --mm-text-sm: 0.875rem;   // 14
+  --mm-text-md: 1rem;       // 16
+  --mm-text-lg: 1.375rem;   // 22
+  --mm-text-xl: 1.875rem;   // 30
+
+  --mm-space-1: 4px;
+  --mm-space-2: 8px;
+  --mm-space-3: 12px;
+  --mm-space-4: 16px;
+  --mm-space-5: 20px;
+  --mm-space-6: 24px;
+  --mm-space-8: 32px;
+
+  --mm-radius-sm: 10px;
+  --mm-radius-md: 16px;
+  --mm-radius-pill: 999px;
+  --mm-border-width: 1.5px;
+
+  --mm-touch: 44px;
+  --mm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mm-duration: 160ms;
+}
