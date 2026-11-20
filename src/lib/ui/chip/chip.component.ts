@@ -26,7 +26,9 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       font: inherit; font-size: var(--mm-text-sm); font-weight: 600; cursor: pointer;
       transition: background var(--mm-duration) var(--mm-ease), color var(--mm-duration) var(--mm-ease);
     }
-    .chip:hover:not(:disabled) { background: var(--mm-surface); }
+    @media (hover: hover) {
+      .chip:hover:not(:disabled):not(.on) { background: var(--mm-surface); }
+    }
     .chip.on { background: var(--mm-text); color: var(--mm-bg); border-color: var(--mm-text); }
     .chip:disabled { opacity: 0.55; cursor: not-allowed; }
   `,
