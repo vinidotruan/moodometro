@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
@@ -17,7 +17,7 @@ const TABS: Tab[] = [
   imports: [RouterOutlet, TabBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="app">
+    <div class="app" [class.typing]="typing()" (focusin)="onFocus()" (focusout)="onBlur()">
       <main class="content"><router-outlet /></main>
       <div class="toast" role="status" aria-live="polite">
         @if (toast.message(); as m) { <span class="pill">{{ m }}</span> }
@@ -29,6 +29,8 @@ const TABS: Tab[] = [
     .app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; position: relative; }
     .content { flex: 1; }
     .tabs { position: sticky; bottom: 0; padding-bottom: env(safe-area-inset-bottom); background: var(--mm-surface); }
+    /* Com o teclado aberto (campo de texto focado), a barra subiria junto: fica escondida enquanto digita. */
+    .app.typing .tabs { display: none; }
     .toast {
       position: fixed; left: 50%; transform: translateX(-50%); z-index: 10;
       bottom: calc(80px + env(safe-area-inset-bottom)); pointer-events: none;
@@ -54,6 +56,24 @@ export class ShellPage {
     { initialValue: this.section() },
   );
 
+  /** Tem campo de texto focado (teclado aberto no celular). */
+  protected readonly typing = signal(false);
+  private blurTimer?: ReturnType<typeof setTimeout>;
+
+  protected onFocus(): void {
+    clearTimeout(this.blurTimer);
+    this.typing.set(isTextField(document.activeElement));
+  }
+
+  /**
+   * A barra só volta um pouco depois do campo perder o foco: se voltasse na hora,
+   * o layout mudaria no meio do toque e o botão tocado (ex.: "Adicionar") perderia o clique.
+   */
+  protected onBlur(): void {
+    clearTimeout(this.blurTimer);
+    this.blurTimer = setTimeout(() => this.typing.set(isTextField(document.activeElement)), 300);
+  }
+
   protected go(id: string): void {
     this.router.navigate(['/', id]);
   }
@@ -61,4 +81,10 @@ export class ShellPage {
   private section(): string {
     return this.router.url.split('/')[1]?.split('?')[0] || 'hoje';
   }
+}
+
+const NOT_TEXT = new Set(['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color']);
+function isTextField(el: Element | null): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  return el instanceof HTMLInputElement && !NOT_TEXT.has(el.type);
 }
