@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
-import { AuthError, AuthProviderId } from '../core/auth/auth.types';
+import { AuthError } from '../core/auth/auth.types';
 import { ThemeService } from '../core/theme.service';
 import { MoodIconComponent } from '../../lib/ui';
 
@@ -21,25 +21,42 @@ import { MoodIconComponent } from '../../lib/ui';
         <p class="tag">Conta pra quem você gosta como você tá hoje, e o que você tá precisando.</p>
       </div>
 
-      <div class="actions">
-        <button type="button" class="btn apple" [disabled]="busy() !== null" (click)="signIn('apple')">
-          @if (busy() === 'apple') { <span class="spinner" aria-hidden="true"></span> }
-          Continuar com a Apple
-        </button>
-        <button type="button" class="btn google" [disabled]="busy() !== null" (click)="signIn('google')">
-          @if (busy() === 'google') { <span class="spinner" aria-hidden="true"></span> }
-          Continuar com o Google
+      <form #form class="actions" (submit)="$event.preventDefault(); submit(form)">
+        <div class="seg" role="group" aria-label="Entrar ou criar conta">
+          <button type="button" [attr.aria-pressed]="mode() === 'entrar'" (click)="setMode('entrar')">Entrar</button>
+          <button type="button" [attr.aria-pressed]="mode() === 'criar'" (click)="setMode('criar')">Criar conta</button>
+        </div>
+
+        <label class="field">
+          <span>Usuário</span>
+          <input class="mm-input" name="username" autocomplete="username" autocapitalize="none"
+            spellcheck="false" maxlength="21" required />
+        </label>
+        @if (mode() === 'criar') {
+          <label class="field">
+            <span>Seu nome</span>
+            <input class="mm-input" name="name" autocomplete="name" maxlength="40" required />
+          </label>
+        }
+        <label class="field">
+          <span>Senha</span>
+          <input class="mm-input" type="password" name="password" maxlength="64" required
+            [attr.autocomplete]="mode() === 'criar' ? 'new-password' : 'current-password'" />
+        </label>
+
+        <button type="submit" class="btn primary" [disabled]="busy()">
+          @if (busy()) { <span class="spinner" aria-hidden="true"></span> }
+          {{ mode() === 'criar' ? 'Criar conta' : 'Entrar' }}
         </button>
 
         <p class="error" role="alert" aria-live="assertive">{{ error() }}</p>
 
         @if (auth.isDemo) {
           <p class="demo">
-            <strong>Modo demo:</strong> o login é simulado e nada sai do seu navegador.
-            O login real com Google e Apple está pronto no código, só falta configurar.
+            <strong>Modo demo:</strong> a conta fica só neste navegador. Nada vai pra internet.
           </p>
         }
-      </div>
+      </form>
 
       <footer class="foot">
         <button type="button" class="theme" (click)="theme.toggle()">
@@ -68,10 +85,14 @@ import { MoodIconComponent } from '../../lib/ui';
     }
     .btn:active:not(:disabled) { transform: scale(0.98); }
     .btn:disabled { opacity: 0.6; cursor: progress; }
-    /* Apple pede botão preto no claro e branco no escuro */
-    .apple { background: #000; color: #fff; }
-    :host-context([data-theme='mocha']) .apple { background: #fff; color: #000; }
-    .google { background: var(--mm-bg); color: var(--mm-text); border-color: var(--mm-border-strong); }
+    .primary { background: var(--mm-primary); color: var(--mm-on-primary); }
+    .field { display: flex; flex-direction: column; gap: var(--mm-space-1); font-weight: 700; font-size: var(--mm-text-sm); }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--mm-radius-md); background: var(--mm-surface); border: var(--mm-border-width) solid var(--mm-border); }
+    .seg button {
+      min-height: var(--mm-touch); border: 0; border-radius: calc(var(--mm-radius-md) - 4px); background: transparent;
+      color: var(--mm-text-muted); font: inherit; font-weight: 700; font-size: var(--mm-text-sm); cursor: pointer;
+    }
+    .seg button[aria-pressed='true'] { background: var(--mm-bg); color: var(--mm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
     .error { min-height: 1.2em; margin: 0; color: var(--mm-danger); font-size: var(--mm-text-sm); text-align: center; }
     .demo {
       margin: 0; padding: var(--mm-space-3); border-radius: var(--mm-radius-md);
@@ -96,22 +117,31 @@ export class LoginPage {
   protected readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
 
-  protected readonly busy = signal<AuthProviderId | null>(null);
+  protected readonly mode = signal<'entrar' | 'criar'>('entrar');
+  protected readonly busy = signal(false);
   protected readonly error = signal('');
 
-  protected async signIn(provider: AuthProviderId): Promise<void> {
+  protected setMode(m: 'entrar' | 'criar'): void {
+    this.mode.set(m);
     this.error.set('');
-    this.busy.set(provider);
+  }
+
+  protected async submit(form: HTMLFormElement): Promise<void> {
+    if (this.busy()) return;
+    const f = new FormData(form);
+    const [username, password, name] = ['username', 'password', 'name'].map((k) => String(f.get(k) ?? ''));
+    this.error.set('');
+    this.busy.set(true);
     try {
-      await this.auth.signIn(provider);
+      if (this.mode() === 'criar') await this.auth.signUp(username, name, password);
+      else await this.auth.signIn(username, password);
       const volta = this.router.parseUrl(this.router.url).queryParams['volta'];
       // Só aceita caminho interno, pra o parâmetro não virar redirecionamento pra fora.
       await this.router.navigateByUrl(typeof volta === 'string' && volta.startsWith('/') && !volta.startsWith('//') ? volta : '/hoje');
     } catch (e) {
-      const err = e as AuthError;
-      if (err.code !== 'cancelled' && err.code !== 'popup-blocked') this.error.set(err.message);
+      this.error.set(e instanceof AuthError ? e.message : 'Não deu pra entrar agora.');
     } finally {
-      this.busy.set(null);
+      this.busy.set(false);
     }
   }
 }

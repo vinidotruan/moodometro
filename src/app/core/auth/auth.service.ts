@@ -2,7 +2,7 @@ import { computed, Injectable, signal } from '@angular/core';
 import { isFirebaseMode } from '../config';
 import { DemoAuthBackend } from './demo-auth';
 import { FirebaseAuthBackend } from './firebase-auth';
-import { AuthBackend, AuthError, AuthProviderId, AuthUser } from './auth.types';
+import { AuthBackend, AuthError, AuthUser } from './auth.types';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -26,10 +26,18 @@ export class AuthService {
     return this.initPromise;
   }
 
-  async signIn(provider: AuthProviderId): Promise<AuthUser> {
+  signIn(username: string, password: string): Promise<AuthUser> {
+    return this.run(() => this.backend.signIn(username, password));
+  }
+
+  signUp(username: string, name: string, password: string): Promise<AuthUser> {
+    return this.run(() => this.backend.signUp(username, name, password));
+  }
+
+  private async run(fn: () => Promise<AuthUser>): Promise<AuthUser> {
     await this.whenReady();
     try {
-      return await this.backend.signIn(provider);
+      return await fn();
     } catch (e) {
       throw e instanceof AuthError ? e : new AuthError('Não deu pra entrar agora.', 'unknown');
     }

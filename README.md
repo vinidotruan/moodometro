@@ -17,35 +17,34 @@ Rotas (hash routing, `#/hoje` etc.):
 
 | Rota | Tela |
 |---|---|
-| `/entrar` | Login com Apple / Google |
+| `/entrar` | Entrar ou criar conta (usuário e senha) |
 | `/hoje` | Escolher humor, assunto, quem vê, compartilhar |
 | `/pessoas` | Lista com o humor de cada um |
 | `/pessoas/:id` | O que a pessoa quer + o que eu quero (seção íntima só em namoro confirmado) |
 | `/convidar` | Cria convite (link de 7 dias, uso único) |
 | `/convite/:código` | Aceitar convite (se não estiver logado, entra e volta pra cá) |
-| `/perfil` | Tema, renomear humores, sair |
+| `/perfil` | Tema, humores (nome, foto, criar e apagar), sair |
 
 As telas só falam com `src/app/core/data.service.ts`, que escolhe o backend:
 
 - `backend/local-backend.ts`: modo demo, dados no localStorage. Simula a outra pessoa confirmando a relação depois de 2 s.
 - `backend/firestore-backend.ts`: modo firebase, tempo real com `onSnapshot`.
 
-## Login (Google + Apple)
+## Login (usuário e senha)
 
-`src/app/core/config.ts`: **`mode: 'demo'`** (login simulado e dados locais) ou **`'firebase'`** (login real e Firestore). Tem o passo a passo no próprio arquivo.
+`src/app/core/config.ts`: **`mode: 'demo'`** (contas e dados só no navegador) ou **`'firebase'`** (login real e Firestore). Tem o passo a passo no próprio arquivo.
 
 `src/app/core/auth/`:
 
-- `auth.service.ts`: signals `user`, `signedIn`, `ready`. As telas só falam com ele.
-- `demo-auth.ts`: login falso, sem rede.
-- `firebase-auth.ts`: Firebase Auth com `GoogleAuthProvider` e `OAuthProvider('apple.com')`. Usa popup e cai pra redirect se o popup for bloqueado. O SDK só é baixado no modo firebase.
+- `auth.service.ts`: signals `user`, `signedIn`, `ready`; `signIn(usuário, senha)` e `signUp(usuário, nome, senha)`. As telas só falam com ele.
+- `auth.types.ts`: regras do usuário (3 a 20 caracteres: letras, números, ponto e _; sempre minúsculo) e da senha (mínimo 6).
+- `demo-auth.ts`: contas no localStorage, com a senha em hash SHA-256 + salt. É só pra navegar pela demo, não é segurança de verdade.
+- `firebase-auth.ts`: Firebase Auth com e-mail e senha; o usuário vira um e-mail sintético (`ruan@usuarios.moodometro.app`). O SDK só é baixado no modo firebase.
 - `auth.guard.ts`: `requireAuth` / `redirectIfSignedIn`.
 
 Pontos de atenção:
-- **Apple** exige conta Apple Developer paga, Services ID, chave privada e domínio verificado.
-- **Apple só manda o nome no primeiro login.** Salve no seu backend nessa hora.
-- Em app iOS nativo publicado na App Store, se tiver login com Google a Apple **exige** oferecer "Sign in with Apple" também.
-- Os botões são só texto. Pra produção, siga os guias de marca: [Google](https://developers.google.com/identity/branding-guidelines) e [Apple](https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple).
+- No Firebase, ative o provedor **E-mail/senha** em Authentication → Sign-in method.
+- Sem e-mail de verdade não dá pra recuperar senha por e-mail; se precisar, peça um e-mail opcional no cadastro.
 - O front nunca é a barreira de segurança: o backend deve validar o ID token do Firebase e decidir quem vê o quê (principalmente a seção íntima).
 
 Na barra do Storybook, o botão **Tema** troca entre Latte, Mocha e "Lado a lado".

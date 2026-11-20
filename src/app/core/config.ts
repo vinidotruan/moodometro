@@ -1,15 +1,13 @@
 /**
  * Configuração do app.
  *
- * mode: 'demo'     → login simulado + dados no navegador (localStorage). Sem rede.
- * mode: 'firebase' → login real (Google + Apple) + dados no Firestore.
+ * mode: 'demo'     → contas (usuário e senha) e dados só no navegador (localStorage). Sem rede.
+ * mode: 'firebase' → login real com usuário e senha (Firebase Auth) + dados no Firestore.
  *
  * Para ligar o modo firebase:
  * 1. Console do Firebase → crie um projeto e um app Web; cole o config abaixo.
- * 2. Authentication → Sign-in method → ative "Google" e "Apple".
- *    Apple: precisa de conta Apple Developer (paga). Crie um Services ID + chave
- *    "Sign in with Apple" e cole no provedor Apple do Firebase. Cadastre o
- *    redirect https://<projeto>.firebaseapp.com/__/auth/handler.
+ * 2. Authentication → Sign-in method → ative "E-mail/senha". O usuário vira um e-mail
+ *    sintético (ruan@usuarios.moodometro.app), então o próprio Firebase garante que é único.
  * 3. Authentication → Settings → Authorized domains: o domínio onde o app roda.
  * 4. Firestore Database → criar (modo produção). Depois, no terminal:
  *      npx firebase login
