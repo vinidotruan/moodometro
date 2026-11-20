@@ -4,7 +4,7 @@ import { Mood, Relation } from '../../../lib/ui';
 import { AuthUser } from '../auth/auth.types';
 import { firestore } from '../firebase';
 import { storage } from '../storage';
-import { Backend, InvitePreview, isIntimateWant, MyDay, newInviteCode, Person, WANTS } from './types';
+import { Backend, EMPTY_MOOD_PREFS, InvitePreview, isIntimateWant, MoodPrefs, MyDay, newInviteCode, Person, WANTS } from './types';
 
 // ---------- formato dos documentos (espelha firestore.rules) ----------
 interface ConnDoc {
@@ -69,7 +69,10 @@ export class FirestoreBackend implements Backend {
   private readonly wantDocs = signal<Record<string, Record<string, number>>>({});
   private readonly invites = signal<{ code: string; data: InviteDoc }[]>([]);
 
-  readonly labels = signal<Partial<Record<Mood, string>>>({});
+  private readonly labels = signal<Partial<Record<Mood, string>>>({});
+  /** No Firestore, por enquanto, só os nomes dos 6 humores padrão. */
+  readonly moodPrefs = computed<MoodPrefs>(() => ({ ...EMPTY_MOOD_PREFS, labels: this.labels() }));
+  readonly canCustomizeMoods = false;
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
@@ -324,6 +327,19 @@ export class FirestoreBackend implements Backend {
   async renameMood(id: Mood, label: string): Promise<void> {
     const { doc, setDoc, serverTimestamp } = this.sdk;
     await setDoc(doc(this.db, 'users', this.uid), { moodLabels: { [id]: label.trim().slice(0, 30) }, updatedAt: serverTimestamp() }, { merge: true });
+  }
+
+  // Fotos e humores novos ainda não existem no Firestore (regras só aceitam os 6 padrão).
+  async setMoodPhoto(): Promise<void> {
+    throw new Error('Fotos de humor ainda não funcionam com o Firebase.');
+  }
+
+  async addMood(): Promise<Mood> {
+    throw new Error('Humores novos ainda não funcionam com o Firebase.');
+  }
+
+  async removeMood(): Promise<void> {
+    throw new Error('Humores novos ainda não funcionam com o Firebase.');
   }
 
   // ---------- convites ----------

@@ -20,9 +20,15 @@ export class DataService {
   readonly loading = this.backend.loading;
   readonly error = this.backend.error;
   readonly connectedPeople = computed(() => this.people().filter((p) => !p.pending));
-  readonly moods = computed<MoodDef[]>(() =>
-    MOODS.map((m) => ({ ...m, label: this.backend.labels()[m.id] || m.label })),
-  );
+  readonly canCustomizeMoods = this.backend.canCustomizeMoods;
+  /** Os 6 humores padrão (com nome/foto do usuário) e depois os criados por ele. */
+  readonly moods = computed<MoodDef[]>(() => {
+    const p = this.backend.moodPrefs();
+    return [
+      ...MOODS.map((m) => ({ ...m, label: p.labels[m.id] || m.label, photo: p.photos[m.id] })),
+      ...p.custom.map((c) => ({ ...c, photo: p.photos[c.id], custom: true })),
+    ];
+  });
 
   constructor() {
     // Liga/desliga os listeners conforme o login.
@@ -43,6 +49,9 @@ export class DataService {
   shareMood = () => this.backend.shareMood();
   setMyWant = (personId: string, wantId: string, value: number) => this.backend.setMyWant(personId, wantId, value);
   renameMood = (id: Mood, label: string) => this.backend.renameMood(id, label);
+  setMoodPhoto = (id: Mood, photo: string | null) => this.backend.setMoodPhoto(id, photo);
+  addMood = (label: string, emoji: string) => this.backend.addMood(label, emoji);
+  removeMood = (id: Mood) => this.backend.removeMood(id);
   createInvite = (label: string, relation: Relation) => this.backend.createInvite(label, relation);
   readInvite = (code: string) => this.backend.readInvite(code);
   acceptInvite = (code: string) => this.backend.acceptInvite(code);

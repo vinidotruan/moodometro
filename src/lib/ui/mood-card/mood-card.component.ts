@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { Mood, moodDef } from '../mood';
+import { Mood, moodColor, MoodDef, moodDef } from '../mood';
 import { MoodIconComponent } from '../mood-icon/mood-icon.component';
 
 @Component({
@@ -9,7 +9,7 @@ import { MoodIconComponent } from '../mood-icon/mood-icon.component';
   host: { '[style.--mood]': 'moodVar()' },
   template: `
     <button type="button" class="card" [class.on]="selected()" [attr.aria-pressed]="selected()" (click)="pick.emit(mood())">
-      <mm-mood-icon [mood]="mood()" [size]="44" />
+      <mm-mood-icon [mood]="mood()" [def]="def()" [size]="44" />
       <span class="label">{{ label() }}</span>
     </button>
   `,
@@ -37,11 +37,13 @@ import { MoodIconComponent } from '../mood-icon/mood-icon.component';
 })
 export class MoodCardComponent {
   readonly mood = input.required<Mood>();
+  /** Definição já resolvida (nome/foto do usuário). */
+  readonly def = input<MoodDef | null>(null);
   readonly selected = input(false);
   /** Nome customizado pelo usuário; padrão = nome do humor. */
   readonly customLabel = input<string | undefined>(undefined, { alias: 'label' });
   readonly pick = output<Mood>();
 
-  protected readonly label = computed(() => this.customLabel() ?? moodDef(this.mood()).label);
-  protected readonly moodVar = computed(() => `var(--mm-mood-${this.mood()})`);
+  protected readonly label = computed(() => this.customLabel() ?? this.def()?.label ?? moodDef(this.mood()).label);
+  protected readonly moodVar = computed(() => moodColor(this.mood()));
 }

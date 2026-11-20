@@ -48,6 +48,22 @@ export interface Person {
 export const bothConfirmed = (p: Person) => p.confirmedByMe && p.confirmedByThem;
 export const intimateOpen = (p: Person) => p.relation === 'namoro' && bothConfirmed(p);
 
+/** Humor criado pelo usuário. */
+export interface CustomMood {
+  id: Mood;
+  label: string;
+  emoji: string;
+}
+
+/** Como o usuário personalizou os humores: nomes, fotos e humores novos. */
+export interface MoodPrefs {
+  labels: Partial<Record<Mood, string>>;
+  photos: Partial<Record<Mood, string>>;
+  custom: CustomMood[];
+}
+
+export const EMPTY_MOOD_PREFS: MoodPrefs = { labels: {}, photos: {}, custom: [] };
+
 /** Rascunho do meu dia. Só vai pros outros quando eu clico em compartilhar. */
 export interface MyDay {
   mood: Mood | null;
@@ -70,7 +86,9 @@ export interface Backend {
   readonly kind: 'demo' | 'firestore';
   readonly me: Signal<MyDay>;
   readonly people: Signal<Person[]>;
-  readonly labels: Signal<Partial<Record<Mood, string>>>;
+  readonly moodPrefs: Signal<MoodPrefs>;
+  /** Fotos e humores novos (por enquanto só no modo demo). */
+  readonly canCustomizeMoods: boolean;
   readonly loading: Signal<boolean>;
   readonly error: Signal<string | null>;
 
@@ -81,6 +99,9 @@ export interface Backend {
   shareMood(): Promise<void>;
   setMyWant(personId: string, wantId: string, value: number): void;
   renameMood(id: Mood, label: string): Promise<void>;
+  setMoodPhoto(id: Mood, photo: string | null): Promise<void>;
+  addMood(label: string, emoji: string): Promise<Mood>;
+  removeMood(id: Mood): Promise<void>;
 
   createInvite(label: string, relation: Relation): Promise<string>;
   readInvite(code: string): Promise<InvitePreview | null>;

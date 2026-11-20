@@ -9,7 +9,7 @@ import { MoodCardComponent } from '../mood-card/mood-card.component';
   template: `
     <div class="grid" role="group" [attr.aria-label]="ariaLabel()">
       @for (m of moods(); track m.id) {
-        <mm-mood-card [mood]="m.id" [label]="m.label" [selected]="value() === m.id" (pick)="value.set($event)" />
+        <mm-mood-card [mood]="m.id" [def]="m" [label]="m.label" [selected]="value() === m.id" (pick)="value.set($event)" />
       }
     </div>
   `,

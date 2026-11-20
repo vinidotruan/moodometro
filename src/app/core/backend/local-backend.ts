@@ -2,12 +2,12 @@ import { computed, signal } from '@angular/core';
 import { Mood, Relation } from '../../../lib/ui';
 import { AuthUser } from '../auth/auth.types';
 import { storage } from '../storage';
-import { Backend, InvitePreview, MyDay, newInviteCode, Person, WANTS } from './types';
+import { Backend, EMPTY_MOOD_PREFS, InvitePreview, MoodPrefs, MyDay, newInviteCode, Person, WANTS } from './types';
 
 interface State {
   me: MyDay;
   people: Person[];
-  labels: Partial<Record<Mood, string>>;
+  moods: MoodPrefs;
 }
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60000).toISOString();
@@ -16,7 +16,7 @@ const defaults = (r: Relation) => Object.fromEntries(WANTS[r].map((w) => [w.id, 
 function seed(): State {
   return {
     me: { mood: null, note: '', topics: [], viewers: ['lucas', 'ana'], sharedAt: null },
-    labels: {},
+    moods: EMPTY_MOOD_PREFS,
     people: [
       {
         id: 'lucas', name: 'Lucas', relation: 'namoro', confirmedByMe: true, confirmedByThem: true,
@@ -46,14 +46,23 @@ function seed(): State {
 
 const KEY = 'mm.data.v2';
 
+/** Lê o estado salvo; versões antigas guardavam só `labels` (nomes dos humores). */
+function load(): State {
+  const raw = storage.get<(State & { labels?: MoodPrefs['labels'] }) | null>(KEY, null);
+  if (!raw) return seed();
+  const { labels, ...rest } = raw;
+  return { ...rest, moods: { ...EMPTY_MOOD_PREFS, ...(raw.moods ?? { labels: labels ?? {} }) } };
+}
+
 /** Modo demo: tudo no navegador. Simula a outra pessoa confirmando depois de 2 s. */
 export class LocalBackend implements Backend {
   readonly kind = 'demo' as const;
-  private readonly state = signal<State>(storage.get<State>(KEY, seed()));
+  private readonly state = signal<State>(load());
 
   readonly me = computed(() => this.state().me);
   readonly people = computed(() => this.state().people);
-  readonly labels = computed(() => this.state().labels);
+  readonly moodPrefs = computed(() => this.state().moods);
+  readonly canCustomizeMoods = true;
   readonly loading = signal(false).asReadonly();
   readonly error = signal<string | null>(null).asReadonly();
 
@@ -82,8 +91,45 @@ export class LocalBackend implements Backend {
     if (p) this.patchPerson(personId, { myWants: { ...p.myWants, [wantId]: value } });
   }
 
+  private setMoods(fn: (m: MoodPrefs) => MoodPrefs): void {
+    this.set((s) => ({ ...s, moods: fn(s.moods) }));
+  }
+
   async renameMood(id: Mood, label: string): Promise<void> {
-    this.set((s) => ({ ...s, labels: { ...s.labels, [id]: label.trim() } }));
+    const name = label.trim().slice(0, 30);
+    this.setMoods((m) =>
+      m.custom.some((c) => c.id === id)
+        ? { ...m, custom: m.custom.map((c) => (c.id === id ? { ...c, label: name || c.label } : c)) }
+        : { ...m, labels: { ...m.labels, [id]: name } },
+    );
+  }
+
+  async setMoodPhoto(id: Mood, photo: string | null): Promise<void> {
+    this.setMoods((m) => {
+      const photos = { ...m.photos };
+      if (photo) photos[id] = photo;
+      else delete photos[id];
+      return { ...m, photos };
+    });
+  }
+
+  async addMood(label: string, emoji: string): Promise<Mood> {
+    const id = `c-${newInviteCode().slice(0, 8)}`;
+    const mood = { id, label: label.trim().slice(0, 30) || 'Novo humor', emoji: emoji.trim() || '🙂' };
+    this.setMoods((m) => ({ ...m, custom: [...m.custom, mood] }));
+    return id;
+  }
+
+  async removeMood(id: Mood): Promise<void> {
+    this.set((s) => {
+      const photos = { ...s.moods.photos };
+      delete photos[id];
+      return {
+        ...s,
+        moods: { ...s.moods, photos, custom: s.moods.custom.filter((c) => c.id !== id) },
+        me: s.me.mood === id ? { ...s.me, mood: null } : s.me,
+      };
+    });
   }
 
   async createInvite(label: string, relation: Relation): Promise<string> {

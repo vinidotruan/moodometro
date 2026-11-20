@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { Mood, moodDef, Relation, RELATION_LABEL } from '../mood';
+import { Mood, moodColor, moodDef, Relation, RELATION_LABEL } from '../mood';
 import { MoodIconComponent } from '../mood-icon/mood-icon.component';
 
 @Component({
@@ -78,6 +78,6 @@ export class PersonCardComponent {
   });
   protected readonly moodVar = computed(() => {
     const m = this.mood();
-    return m ? `var(--mm-mood-${m})` : 'transparent';
+    return m ? moodColor(m) : 'transparent';
   });
 }
